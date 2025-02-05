@@ -1,0 +1,5 @@
+{
+	"plugin_paths" : [
+		"plugins/jetchariot/jetchariot_control.js"
+	]
+}
