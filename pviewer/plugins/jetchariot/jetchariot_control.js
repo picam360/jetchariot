@@ -2,14 +2,15 @@ var create_plugin = (function () {
 	var m_plugin_host = null;
 	var m_is_init = false;
 	var m_event_handler = null;
-	var m_crawler_mode = false;
+	var m_bullets = [];
 	var m_warp_tilt = 0;
 	var m_osg_enabled = false;
+	var m_view_quat = [0,0,0,1];
 
 	var STARTING_TIMEOUT = 60;
 	var PLAYTING_TIMEOUT = 180;
 
-	var VEHICLE_DOMAIN = UPSTREAM_DOMAIN + "jetavator_service.";
+	var VEHICLE_DOMAIN = UPSTREAM_DOMAIN + "jetchariot_service.";
 
 	function cal_current_pitch_yaw_deg() {
 		var view_offset_quat = m_plugin_host.get_view_offset()
@@ -65,6 +66,77 @@ var create_plugin = (function () {
 		return btoa([...data].map(n => String.fromCharCode(n)).join(""));
 	}
 
+	var m_objs = [
+		{
+			url : "/amf/bullet.amf",
+			obj_id : "bullet",
+			obj : null,
+			default_color : "0.6,0.0,0.0,1.0",
+			prepared : false,
+		},
+	];
+
+	function load_objs(idx){
+		if(idx === undefined){
+			idx = 0;
+		}else if(idx >= m_objs.length){
+			return;
+		}
+		var base_url = "plugins-ext/jetchariot";
+		if(m_objs[idx].url){
+			var getFile = m_plugin_host.getFile;
+			if(m_plugin_host.getFileFromUpstream){
+				getFile = m_plugin_host.getFileFromUpstream;
+			}
+			getFile(base_url + m_objs[idx].url, (data) => {
+				if(Array.isArray(data)){
+					data = data[0];
+				}
+				m_objs[idx].obj = base64encode_binary(data);
+				m_objs[idx].prepared = true;
+				load_objs(idx + 1);
+			});
+		}else{
+			m_objs[idx].prepared = true;
+			load_objs(idx + 1);
+		}
+	}
+
+	function upload_objs(pstcore, pst){
+		var json = {
+			nodes : [],
+		};
+		for(var node of m_objs){
+			json.nodes.push({
+				obj : node.obj,
+				default_color : node.default_color,
+				smooth_shading : false,
+				obj_id : node.obj_id,
+			});
+		}
+		var json_str = JSON.stringify(json);
+		pstcore.pstcore_set_param(pst, "renderer", "overlay_obj", json_str);
+	}
+
+	function set_bullets(bullets){
+		var scale = 0.2;
+		var jobj = {
+			"id" : "bullets",
+			"nodes" : []
+		};
+		for(const info of bullets){
+			jobj.nodes.push({
+				"obj_scale" : scale,
+				"obj_pos" : `${info.pos.x},${-info.pos.y},${info.pos.z}`,
+				"obj_quat" : "0,0,0,1",
+				"use_light" : true,
+				"blend" : false,
+				"obj_id" : "bullet",
+			});
+		}
+		m_pstcore.pstcore_set_param(m_pst, "renderer", "overlay", JSON.stringify(jobj));
+	}
+
 	var m_imgs = [
 		{
 			url : "/img/title.png",
@@ -80,7 +152,7 @@ var create_plugin = (function () {
 		}else if(idx >= m_imgs.length){
 			return;
 		}
-		var base_url = "plugins/jetavator";
+		var base_url = "plugins-ext/jetchariot";
 		if(m_imgs[idx].url){
 			var getFile = m_plugin_host.getFile;
 			if(m_plugin_host.getFileFromUpstream){
@@ -323,11 +395,11 @@ var create_plugin = (function () {
 
 		push_str(overlay_json.nodes, "CONTROLLER MODE", 50, 60, 10, 4);
 		if(m_mode == "JIS"){
-			push_str(overlay_json.nodes, "[*]YOKO SENKAI", 50, 65, z_pos[0], font_size[0]);
-			push_str(overlay_json.nodes, "[ ]TATE SENKAI", 50, 70, z_pos[1], font_size[1]);
+			push_str(overlay_json.nodes, "[*]Option1", 50, 65, z_pos[0], font_size[0]);
+			push_str(overlay_json.nodes, "[ ]Option2", 50, 70, z_pos[1], font_size[1]);
 		}else{
-			push_str(overlay_json.nodes, "[ ]YOKO SENKAI", 50, 65, z_pos[0], font_size[0]);
-			push_str(overlay_json.nodes, "[*]TATE SENKAI", 50, 70, z_pos[1], font_size[1]);
+			push_str(overlay_json.nodes, "[ ]Option1", 50, 65, z_pos[0], font_size[0]);
+			push_str(overlay_json.nodes, "[*]Option2", 50, 70, z_pos[1], font_size[1]);
 		}
 
 		push_str(overlay_json.nodes, "START", 50, 80, z_pos[2], font_size[2]);
@@ -349,6 +421,28 @@ var create_plugin = (function () {
 		}
 	}
 
+	function getPitchYawFromQuaternion(q) {
+		// クォータニオンを作成
+		const quaternion = new THREE.Quaternion(q[0], q[1], q[2], q[3]);
+	
+		// 初期ベクトルを定義（上方向が基準）
+		const initialVec = new THREE.Vector3(0, -1, 0);
+	
+		// 回転行列をクォータニオンから取得してベクトルを変換
+		const rotatedVec = initialVec.applyQuaternion(quaternion);
+	
+		// ベクトルを正規化
+		rotatedVec.normalize();
+	
+		// ピッチ（Y軸上の回転角）を計算
+		const pitch = Math.acos(-rotatedVec.y) * (180 / Math.PI);
+
+		// ヨー（Y軸周りの回転角）を計算
+		const yaw = Math.atan2(rotatedVec.x, -rotatedVec.z) * (180 / Math.PI);
+	
+		return [pitch - 90, yaw];
+	}
+
 	function playing(timeout_callback){
 		m_event_handler = (sender, key, new_state) => {
 			var view_tilt = cal_current_pitch_yaw_deg()[0];
@@ -358,33 +452,36 @@ var create_plugin = (function () {
 			if(!new_state){//fail safe
 				return;
 			}
-			var crawler_mode = false;
+			var bullet = false;
 			if(new_state["10_BUTTON_PUSHED"] || new_state["11_BUTTON_PUSHED"]){
-				crawler_mode = true;
+				bullet = true;
 			}
 			//quest touch : 0_BUTTON trriger, 1_BUTTON grip, 3_BUTTON axis
 			if(new_state["LEFT_3_BUTTON_PUSHED"] || new_state["RIGHT_3_BUTTON_PUSHED"]){
-				crawler_mode = true;
+				bullet = true;
 			}
-			if (crawler_mode != m_crawler_mode) {
-				m_crawler_mode = crawler_mode;
-				{
-					var cmd = VEHICLE_DOMAIN + "reset";
-					m_plugin_host.send_command(cmd);
-				}
+			if (bullet) {
+				const [ pitch_deg, yaw_deg ] = getPitchYawFromQuaternion(m_view_quat);
+				const speed = 2;
+				const speed_h = speed * Math.cos(Math.PI*pitch_deg/180);
+				const speed_v = speed * Math.sin(Math.PI*pitch_deg/180);
+				//world coordinate
+				m_bullets.push({
+					pos : {
+						x : 0.5 * Math.sin(Math.PI*yaw_deg/180),
+						y : 0.0,
+						z : 0.5 * Math.cos(Math.PI*yaw_deg/180),
+					},
+					speed : {
+						x : speed_h * Math.sin(Math.PI*yaw_deg/180),
+						y : speed_v,
+						z : speed_h * Math.cos(Math.PI*yaw_deg/180),
+					}
+				});
 			}
 
 			var table;
-			if (m_crawler_mode) {
-				//https://gamepad-tester.com/
-				table = {
-					"1_AXIS_PERCENT": "CrawlerMode_LeftVertical",
-					"3_AXIS_PERCENT": "CrawlerMode_RightVertical",
-					//quest touch
-					"LEFT_3_AXIS_PERCENT": "CrawlerMode_LeftVertical",
-					"RIGHT_3_AXIS_PERCENT": "CrawlerMode_RightVertical",
-				};
-			} else {
+			{
 				//https://gamepad-tester.com/
 				table = {
 					"0_AXIS_PERCENT": "LeftHorizon",
@@ -466,9 +563,18 @@ var create_plugin = (function () {
 	var m_pstcore = null;
 	var m_score = 0;
 	function init() {
-		m_state = "load_imgs";
+		m_state = "load_objs";
 		var state_poling = setInterval(() => {
 			switch(m_state){
+				case "load_objs":
+					load_objs();
+					m_state = "wait_load_objs";
+					break;
+				case "wait_load_objs":
+					if(m_objs[m_objs.length - 1].prepared){
+						m_state = "load_imgs";
+					}
+					break;
 				case "load_imgs":
 					load_imgs();
 					m_state = "wait_load_imgs";
@@ -483,9 +589,20 @@ var create_plugin = (function () {
 					if(m_pst){
 						m_pstcore = app.get_pstcore();
 						m_pstcore.pstcore_add_set_param_done_callback(m_pst, (pst_name, param, value)=>{
-							if(pst_name == "jetavator_service"){
+							if(pst_name == "jetchariot_service"){
 								if(param == "score"){
 									m_score = value;
+								}
+							}
+							if(pst_name == "renderer"){
+								if(param == "view_quat"){
+									const ary = value.split(',');
+									m_view_quat = [
+										parseFloat(ary[0]),
+										parseFloat(ary[1]),
+										parseFloat(ary[2]),
+										parseFloat(ary[3]),
+									];
 								}
 							}
 							if(pst_name == "warp"){
@@ -499,9 +616,29 @@ var create_plugin = (function () {
 							m_pstcore.pstcore_set_param(m_pst, "osg", "enabled", "1");
 						}
 
+						upload_objs(m_pstcore, m_pst);
 						upload_imgs(m_pstcore, m_pst);
 						m_state_st = new Date().getTime();
 						m_state = "wait_play_start";
+
+						setInterval(() => {
+							set_bullets(m_bullets);
+							const bullets = [];
+							for(const info of m_bullets){
+								info.pos.x += info.speed.x * 0.1;
+								info.pos.y += info.speed.y * 0.1;
+								info.pos.z += info.speed.z * 0.1;
+								if(info.pos.y > -0.5 && info.pos.z < 10){
+									bullets.push(info);
+								}
+								info.speed.y -= 0.05 * 9.8 * 0.1;//gravity
+								info.speed.x -= info.speed.x * 0.01;//air
+								info.speed.y -= info.speed.y * 0.01;//air
+								info.speed.z -= info.speed.z * 0.01;//air
+								
+							}
+							m_bullets = bullets;
+						},100);
 					}
 					break;
 				case "wait_play_start":
