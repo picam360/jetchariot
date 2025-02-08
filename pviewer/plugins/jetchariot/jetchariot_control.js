@@ -1,11 +1,14 @@
 var create_plugin = (function () {
 	var m_plugin_host = null;
+	var m_options = null;
 	var m_is_init = false;
 	var m_event_handler = null;
 	var m_bullets = [];
 	var m_warp_tilt = 0;
 	var m_osg_enabled = false;
 	var m_view_quat = [0,0,0,1];
+	
+	var m_mode = "JIS";
 
 	var STARTING_TIMEOUT = 60;
 	var PLAYTING_TIMEOUT = 180;
@@ -20,47 +23,6 @@ var create_plugin = (function () {
 		var quat = view_offset_quat.multiply(view_quat);
 		return calPitchYawDegree(quat);
 	}
-
-	function button_svg(charactor, bgcolor, charcolor, fontsize, yoffset) {
-		charcolor = charcolor || "ffffff";
-		fontsize = fontsize || 74;
-		yoffset = yoffset || 65;
-		var tmp = "%3C%3Fxml%20version%3D%221.0%22%20encoding%3D%22UTF-8%22%20standalone%3D%22no%22%3F%3E%0D%0A%3C!DOCTYPE%20svg%20PUBLIC%20%22-%2F%2FW3C%2F%2FDTD%20SVG%201.1%2F%2FEN%22%20%22http%3A%2F%2Fwww.w3.org%2FGraphics%2FSVG%2F1.1%2FDTD%2Fsvg11.dtd%22%3E%0D%0A%3Csvg%20version%3D%221.1%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20xmlns%3Axlink%3D%22http%3A%2F%2Fwww.w3.org%2F1999%2Fxlink%22%20preserveAspectRatio%3D%22xMidYMid%20meet%22%20viewBox%3D%220%200%20100%20100%22%20width%3D%22100%22%20height%3D%22100%22%3E%3Cdefs%3E%3Cpath%20d%3D%22M100%2050C100%2077.6%2077.6%20100%2050%20100C22.41%20100%200%2077.6%200%2050C0%2022.41%2022.41%200%2050%200C77.6%200%20100%2022.41%20100%2050Z%22%20id%3D%22e2iuzi5oh%22%3E%3C%2Fpath%3E%3Ctext%20id%3D%22d6VhEb28r%22%20x%3D%220%22%20y%3D%220%22%20font-size%3D%22{FONTSIZE}%22%20font-family%3D%22Open%20Sans%22%20font-weight%3D%22700%22%20font-style%3D%22normal%22%20letter-spacing%3D%220%22%20alignment-baseline%3D%22before-edge%22%20transform%3D%22matrix(1%200%200%201%20-9.189412406599615%20-53.60929047562422)%22%20style%3D%22line-height%3A100%25%22%20xml%3Aspace%3D%22preserve%22%20dominant-baseline%3D%22text-before-edge%22%3E%3Ctspan%20x%3D%22{XOFFSET}%22%20dy%3D%22{YOFFSET}%22%20alignment-baseline%3D%22before-edge%22%20dominant-baseline%3D%22text-before-edge%22%20text-anchor%3D%22middle%22%3E{CHARACTOR}%3C%2Ftspan%3E%3C%2Ftext%3E%3C%2Fdefs%3E%3Cg%3E%3Cg%3E%3Cg%3E%3Cuse%20xlink%3Ahref%3D%22%23e2iuzi5oh%22%20opacity%3D%221%22%20fill%3D%22%23{BGCOLOR}%22%20fill-opacity%3D%221%22%3E%3C%2Fuse%3E%3C%2Fg%3E%3Cg%20id%3D%22e2Qw0Jczps%22%3E%3Cuse%20xlink%3Ahref%3D%22%23d6VhEb28r%22%20opacity%3D%221%22%20fill%3D%22%23{CHARCOLOR}%22%20fill-opacity%3D%221%22%3E%3C%2Fuse%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E%0D%0A";
-		return tmp.replace("{XOFFSET}", "60").replace("{YOFFSET}", yoffset)
-			.replace("{CHARACTOR}", charactor).replace("{BGCOLOR}", bgcolor).replace("{CHARCOLOR}", charcolor)
-			.replace("{FONTSIZE}", fontsize);
-	}
-
-	var JIS_ICON = "data:image/svg+xml," + button_svg("J", "888888");
-	var CAT_ICON = "data:image/svg+xml," + button_svg("C", "ffff00", "000000");
-
-	var m_mode = "JIS";
-	var MODE_DEF = {
-		"JIS": {
-			"LeftHorizon": { mod: "yaw", dir: -1 },
-			"LeftVertical": { mod: "arm", dir: -1 },
-			"RightHorizon": { mod: "bucket", dir: -1 },
-			"RightVertical": { mod: "boom", dir: -1 },
-			"LeftBackOpt": { cmd: "reverse LeftBack" },
-			"RightBackOpt": { cmd: "reverse RightBack" },
-			"LeftBack": { mod: "left_crawler", dir: 1 },
-			"RightBack": { mod: "right_crawler", dir: 1 },
-			"CrawlerMode_LeftVertical": { mod: "left_crawler", dir: -1 },
-			"CrawlerMode_RightVertical": { mod: "right_crawler", dir: -1 },
-		},
-		"CAT": {
-			"LeftHorizon": { mod: "arm", dir: -1 },
-			"LeftVertical": { mod: "yaw", dir: 1 },
-			"RightHorizon": { mod: "bucket", dir: -1 },
-			"RightVertical": { mod: "boom", dir: -1 },
-			"LeftBackOpt": { cmd: "reverse LeftBack" },
-			"RightBackOpt": { cmd: "reverse RightBack" },
-			"LeftBack": { mod: "left_crawler", dir: 1 },
-			"RightBack": { mod: "right_crawler", dir: 1 },
-			"CrawlerMode_LeftVertical": { mod: "left_crawler", dir: -1 },
-			"CrawlerMode_RightVertical": { mod: "right_crawler", dir: -1 },
-		}
-	};
 	
 	function base64encode_binary(data){
 		return btoa([...data].map(n => String.fromCharCode(n)).join(""));
@@ -461,16 +423,17 @@ var create_plugin = (function () {
 				bullet = true;
 			}
 			if (bullet) {
-				const [ pitch_deg, yaw_deg ] = getPitchYawFromQuaternion(m_view_quat);
+				const [ pitch_deg, cam_yaw_deg ] = getPitchYawFromQuaternion(m_view_quat);
+				const yaw_deg = cam_yaw_deg + m_odom.odom.heading;
 				const speed = 2;
 				const speed_h = speed * Math.cos(Math.PI*pitch_deg/180);
 				const speed_v = speed * Math.sin(Math.PI*pitch_deg/180);
 				//world coordinate
 				m_bullets.push({
 					pos : {
-						x : 0.5 * Math.sin(Math.PI*yaw_deg/180),
+						x : 0.5 * Math.sin(Math.PI*yaw_deg/180) + m_odom.odom.x,
 						y : 0.0,
-						z : 0.5 * Math.cos(Math.PI*yaw_deg/180),
+						z : 0.5 * Math.cos(Math.PI*yaw_deg/180) + m_odom.odom.z,
 					},
 					speed : {
 						x : speed_h * Math.sin(Math.PI*yaw_deg/180),
@@ -503,36 +466,32 @@ var create_plugin = (function () {
 					"RIGHT_1_BUTTON_PERCENT": "RightBack",
 				};
 			}
-			if (table[key] && MODE_DEF[m_mode] && MODE_DEF[m_mode][table[key]]) {
+			if (table[key]) {
 				if(sender.toUpperCase() != "OSG" && m_osg_enabled){
 					m_osg_enabled = false;
 					m_pstcore.pstcore_set_param(m_pst, "osg", "enabled", "0");
 				}
-				if (!MODE_DEF[m_mode][table[key]].mod) {
-					return;
-				}
 				var value = new_state[key].toFixed(0);
-				if (MODE_DEF[m_mode][table[key]].dir) {
-					value *= MODE_DEF[m_mode][table[key]].dir;
-				}
-				for (var key2 in new_state) { // execute command
-					if (new_state[key2] && table[key2] && MODE_DEF[m_mode] && MODE_DEF[m_mode][table[key2]]) {
-						if (!MODE_DEF[m_mode][table[key2]].cmd) {
-							continue;
-						}
-						var params = MODE_DEF[m_mode][table[key2]].cmd.split(' ');
-						if (params.length == 2 && params[1] == table[key]) {
-							switch (params[0]) {
-								case "reverse":
-									value *= -1;
-									break;
-							}
-						}
+				if(table[key] == "RightHorizon"){
+					if(value > 50){
+						m_vehicle_cmd = "turn_left";
+					}else if(value < -50){
+						m_vehicle_cmd = "turn_right";
+					}else{
+						m_vehicle_cmd = "stop";
 					}
+					console.log(m_vehicle_cmd);
 				}
-				var cmd = VEHICLE_DOMAIN + MODE_DEF[m_mode][table[key]].mod + " " + value;
-				m_plugin_host.send_command(cmd);
-				console.log(cmd);
+				if(table[key] == "RightVertical"){
+					if(value > 50){
+						m_vehicle_cmd = "move_forward";
+					}else if(value < -50){
+						m_vehicle_cmd = "move_backward";
+					}else{
+						m_vehicle_cmd = "stop";
+					}
+					console.log(m_vehicle_cmd);
+				}
 			}
 		};
 
@@ -557,15 +516,79 @@ var create_plugin = (function () {
 		}
 	}
 
+	function open_webdis(url, callback){
+
+		const socket = new WebSocket(url);
+		socket.channel_callbacks = {};
+
+		socket.onmessage = function(event) {
+			const msg = JSON.parse(event.data);
+			if(!msg["SUBSCRIBE"] || msg["SUBSCRIBE"][0] != "message"){
+				return;
+			}
+			const channel = msg["SUBSCRIBE"][1];
+			if(socket.channel_callbacks[channel]){
+				const data = msg["SUBSCRIBE"][2];
+				socket.channel_callbacks[channel](data);
+			}
+		};
+
+		socket.onopen = function() {
+			console.log("webdis connection established");
+			callback(socket);
+		};
+
+		socket.onclose = function() {
+			console.log("webdis connection closed");
+		};
+
+		socket.onerror = function(error) {
+			console.log(`Error: ${error.message}`);
+		};
+	}
+	function subscribe(socket, channel, callback){
+		socket.channel_callbacks[channel] = callback;
+		socket.send(JSON.stringify(["SUBSCRIBE", channel]));
+	}
+
 	var m_state = "none";
 	var m_state_st = 0;
+	var m_vehicle_cmd = "stop";
+	var m_odom = {
+		x : 0,
+		y : 0,
+		heading : 0,
+	};
 	var m_pst = 0;
 	var m_pstcore = null;
 	var m_score = 0;
 	function init() {
-		m_state = "load_objs";
+		m_state = "webdis";
 		var state_poling = setInterval(() => {
 			switch(m_state){
+				case "webdis":
+					if(m_options.webdis_url){
+						open_webdis(m_options.webdis_url, (socket) => {
+							setInterval(() => {
+								socket.send(JSON.stringify([
+									"PUBLISH", 
+									"pserver-vehicle-wheel", 
+									`CMD ${m_vehicle_cmd}`
+								]));
+							}, 100);
+						});
+						open_webdis(m_options.webdis_url, (socket) => {
+							subscribe(socket, "pserver-odometry-info", (data) => {
+								const info = JSON.parse(data);
+								if(info.state == "UPDATE_ODOMETRY"){
+									m_odom = JSON.parse(data);
+									//console.log(m_odom);
+								}
+							});
+						})
+					}
+					m_state = "load_objs";
+					break;
 				case "load_objs":
 					load_objs();
 					m_state = "wait_load_objs";
@@ -679,11 +702,16 @@ var create_plugin = (function () {
 
 	return function (plugin_host) {
 		m_plugin_host = plugin_host;
-		if (!m_is_init) {
-			m_is_init = true;
-			init();
-		}
 		var plugin = {
+            init_options: function (options) {
+                m_options = options["jetchariot"] || {};
+                m_options = JSON.parse(JSON.stringify(m_options).replace("${window.location.hostname}", window.location.hostname));
+
+				if (!m_is_init) {
+					m_is_init = true;
+					init();
+				}
+			},
 			event_handler : function(sender, event, state) {
 				if(m_event_handler){
 					m_event_handler(sender, event, state);

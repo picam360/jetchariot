@@ -1,5 +1,8 @@
 {
 	"plugin_paths" : [
 		"plugins/jetchariot/jetchariot_control.js"
-	]
+	],
+	"jetchariot" : {
+		"webdis_url" : "ws://${window.location.hostname}:7379"
+	}
 }
