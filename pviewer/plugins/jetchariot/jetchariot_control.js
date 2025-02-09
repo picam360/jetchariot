@@ -81,15 +81,30 @@ var create_plugin = (function () {
 	}
 
 	function set_bullets(bullets){
-		var scale = 0.2;
+		var scale = 0.04;
 		var jobj = {
 			"id" : "bullets",
 			"nodes" : []
-		};
-		for(const info of bullets){
+		};	
+		for(const bullet of bullets){
+			const pos = Object.assign({}, bullet.pos);//world coodinate
+			{//camera coodinate
+				pos.x -= m_odom.x;
+				pos.y -= 0;
+				pos.z -= m_odom.y;
+
+				const x = pos.x;
+				const y = pos.z;
+				const angle_rad = -m_odom.heading * Math.PI / 180.0;
+				const x_rotated = x * Math.cos(angle_rad) - y * Math.sin(angle_rad);
+				const y_rotated = x * Math.sin(angle_rad) + y * Math.cos(angle_rad);
+
+				pos.x = x_rotated;
+				pos.z = y_rotated;
+			}
 			jobj.nodes.push({
 				"obj_scale" : scale,
-				"obj_pos" : `${info.pos.x},${-info.pos.y},${info.pos.z}`,
+				"obj_pos" : `${pos.x},${-pos.y},${pos.z}`,
 				"obj_quat" : "0,0,0,1",
 				"use_light" : true,
 				"blend" : false,
@@ -424,16 +439,16 @@ var create_plugin = (function () {
 			}
 			if (bullet) {
 				const [ pitch_deg, cam_yaw_deg ] = getPitchYawFromQuaternion(m_view_quat);
-				const yaw_deg = cam_yaw_deg + m_odom.odom.heading;
-				const speed = 2;
+				const yaw_deg = cam_yaw_deg - m_odom.heading;
+				const speed = 0.4;
 				const speed_h = speed * Math.cos(Math.PI*pitch_deg/180);
 				const speed_v = speed * Math.sin(Math.PI*pitch_deg/180);
 				//world coordinate
 				m_bullets.push({
 					pos : {
-						x : 0.5 * Math.sin(Math.PI*yaw_deg/180) + m_odom.odom.x,
+						x : 0.1 * Math.sin(Math.PI*yaw_deg/180) + m_odom.x,
 						y : 0.0,
-						z : 0.5 * Math.cos(Math.PI*yaw_deg/180) + m_odom.odom.z,
+						z : 0.1 * Math.cos(Math.PI*yaw_deg/180) + m_odom.y,
 					},
 					speed : {
 						x : speed_h * Math.sin(Math.PI*yaw_deg/180),
@@ -474,9 +489,9 @@ var create_plugin = (function () {
 				var value = new_state[key].toFixed(0);
 				if(table[key] == "RightHorizon"){
 					if(value > 50){
-						m_vehicle_cmd = "turn_left";
-					}else if(value < -50){
 						m_vehicle_cmd = "turn_right";
+					}else if(value < -50){
+						m_vehicle_cmd = "turn_left";
 					}else{
 						m_vehicle_cmd = "stop";
 					}
@@ -484,9 +499,9 @@ var create_plugin = (function () {
 				}
 				if(table[key] == "RightVertical"){
 					if(value > 50){
-						m_vehicle_cmd = "move_forward";
-					}else if(value < -50){
 						m_vehicle_cmd = "move_backward";
+					}else if(value < -50){
+						m_vehicle_cmd = "move_forward";
 					}else{
 						m_vehicle_cmd = "stop";
 					}
@@ -580,8 +595,8 @@ var create_plugin = (function () {
 						open_webdis(m_options.webdis_url, (socket) => {
 							subscribe(socket, "pserver-odometry-info", (data) => {
 								const info = JSON.parse(data);
-								if(info.state == "UPDATE_ODOMETRY"){
-									m_odom = JSON.parse(data);
+								if(info.state == "UPDATE_ODOMETRY" && info.odom){
+									m_odom = info.odom;
 									//console.log(m_odom);
 								}
 							});
@@ -644,24 +659,33 @@ var create_plugin = (function () {
 						m_state_st = new Date().getTime();
 						m_state = "wait_play_start";
 
+						const qs = 0.1;
 						setInterval(() => {
 							set_bullets(m_bullets);
 							const bullets = [];
-							for(const info of m_bullets){
-								info.pos.x += info.speed.x * 0.1;
-								info.pos.y += info.speed.y * 0.1;
-								info.pos.z += info.speed.z * 0.1;
-								if(info.pos.y > -0.5 && info.pos.z < 10){
-									bullets.push(info);
+							for(const bullet of m_bullets){
+								if(bullet.pos.y < -0.5){
+									continue;
 								}
-								info.speed.y -= 0.05 * 9.8 * 0.1;//gravity
-								info.speed.x -= info.speed.x * 0.01;//air
-								info.speed.y -= info.speed.y * 0.01;//air
-								info.speed.z -= info.speed.z * 0.01;//air
 								
+								const d2 = bullet.pos.x ** 2 + bullet.pos.z ** 2;
+								if(d2 > 10 ** 2){
+									continue;
+								}
+
+								bullet.pos.x += bullet.speed.x * qs;
+								bullet.pos.y += bullet.speed.y * qs;
+								bullet.pos.z += bullet.speed.z * qs;
+								
+								bullet.speed.y -= 0.01 * 9.8 * qs;//gravity
+								bullet.speed.x -= bullet.speed.x * 0.1 * qs;//air
+								bullet.speed.y -= bullet.speed.y * 0.1 * qs;//air
+								bullet.speed.z -= bullet.speed.z * 0.1 * qs;//air
+
+								bullets.push(bullet);
 							}
 							m_bullets = bullets;
-						},100);
+						}, 1000 * qs);
 					}
 					break;
 				case "wait_play_start":
